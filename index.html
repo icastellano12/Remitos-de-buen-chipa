@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Remitos" />
+<title>Remitos Panadería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
+  }
+}
+</script>
+<style>
+  html, body { margin:0; padding:0; background:#FAF6EE; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useState, useEffect, useMemo } from "react";
+import ReactDOM from "react-dom/client";
+import { Plus, ArrowLeft, Trash2, X, Check, Wheat, Receipt } from "lucide-react";
+
+const money = (n) =>
+  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(
+    Math.round(n || 0)
+  );
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const fmtDate = (iso) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+};
+
+function statusOf(remito) {
+  const total = remito.items.reduce((s, it) => s + it.qty * it.price, 0);
+  const paid = remito.payments.reduce((s, p) => s + p.amount, 0);
+  const balance = total - paid;
+  if (balance <= 0) return { status: "pagado", total, paid, balance: 0 };
+  if (paid > 0) return { status: "parcial", total, paid, balance };
+  return { status: "pendiente", total, paid, balance };
+}
+
+const STAMP = {
+  pagado: { label: "PAGADO", color: "#5C7C4B" },
+  parcial: { label: "PARCIAL", color: "#C08A3E" },
+  pendiente: { label: "PENDIENTE", color: "#B5482D" },
+};
+
+function Stamp({ status }) {
+  const s = STAMP[status];
+  return (
+    <div
+      style={{
+        border: `2px solid ${s.color}`,
+        color: s.color,
+        transform: "rotate(-6deg)",
+        fontFamily: "'Special Elite', monospace",
+        letterSpacing: "0.08em",
+      }}
+      className="px-2 py-0.5 text-[10px] font-bold rounded-sm select-none shrink-0"
+    >
+      {s.label}
+    </div>
+  );
+}
+
+function TicketEdge({ flip }) {
+  const dots = Array.from({ length: 22 });
+  return (
+    <div className={`flex ${flip ? "rotate-180" : ""} justify-between px-1`}>
+      {dots.map((_, i) => (
+        <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: "#FAF6EE" }} />
+      ))}
+    </div>
+  );
+}
+
+const LS_CLIENTS = "remitos_panaderia_clients";
+const LS_REMITOS = "remitos_panaderia_remitos";
+
+export default function App() {
+  const [clients, setClients] = useState(null);
+  const [remitos, setRemitos] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState({ name: "clients" });
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_CLIENTS) || "[]");
+      const r = JSON.parse(localStorage.getItem(LS_REMITOS) || "[]");
+      setClients(c);
+      setRemitos(r);
+    } catch (e) {
+      setClients([]);
+      setRemitos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const saveClients = (next) => {
+    setClients(next);
+    try {
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(next));
+    } catch (e) {
+      showToast("No se pudo guardar. Reintentá.");
+    }
+  };
+
+  const saveRemitos = (next) => {
+    setRemitos(next);
+    try {
+      localStorage.setItem(LS_REMITOS, JSON.stringify(next));
+    } catch (e) {
+      showToast("No se pudo guardar. Reintentá.");
+    }
+  };
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  };
+
+  const clientBalances = useMemo(() => {
+    if (!clients || !remitos) return [];
+    return clients
+      .map((c) => {
+        const rs = remitos.filter((r) => r.clientId === c.id);
+        const balance = rs.reduce((s, r) => s + statusOf(r).balance, 0);
+        const pending = rs.filter((r) => statusOf(r).status !== "pagado").length;
+        return { ...c, balance, remitoCount: rs.length, pending };
+      })
+      .sort((a, b) => b.balance - a.balance);
+  }, [clients, remitos]);
+
+  const totalOwed = clientBalances.reduce((s, c) => s + c.balance, 0);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FAF6EE" }}>
+        <Wheat className="animate-pulse" size={32} color="#C08A3E" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="min-h-screen"
+      style={{ background: "#FAF6EE", fontFamily: "'Work Sans', ui-sans-serif, system-ui" }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=Special+Elite&display=swap');
+        * { box-sizing: border-box; }
+        .display { font-family: 'Fraunces', serif; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid #C08A3E; outline-offset: 1px; }
+        button:focus-visible { outline: 2px solid #C08A3E; outline-offset: 2px; }
+      `}</style>
+
+      <div className="max-w-md mx-auto pb-28">
+        <Header totalOwed={totalOwed} view={view} setView={setView} clients={clients} />
+
+        <div className="px-4">
+          {view.name === "clients" && (
+            <ClientsView
+              clientBalances={clientBalances}
+              onOpen={(c) => setView({ name: "client", clientId: c.id })}
+              onAdd={(name) => {
+                const c = { id: crypto.randomUUID(), name };
+                saveClients([...clients, c]);
+              }}
+            />
+          )}
+
+          {view.name === "client" && (
+            <ClientView
+              client={clients.find((c) => c.id === view.clientId)}
+              remitos={remitos.filter((r) => r.clientId === view.clientId)}
+              onBack={() => setView({ name: "clients" })}
+              onNewRemito={() => setView({ name: "newRemito", clientId: view.clientId })}
+              onOpenPayment={(remitoId) => setView({ name: "payment", clientId: view.clientId, remitoId })}
+              onDeleteRemito={(id) => {
+                saveRemitos(remitos.filter((r) => r.id !== id));
+              }}
+              onDeleteClient={() => {
+                saveClients(clients.filter((c) => c.id !== view.clientId));
+                saveRemitos(remitos.filter((r) => r.clientId !== view.clientId));
+                setView({ name: "clients" });
+              }}
+            />
+          )}
+
+          {view.name === "newRemito" && (
+            <NewRemitoView
+              onCancel={() => setView({ name: "client", clientId: view.clientId })}
+              onSave={(remito) => {
+                const r = {
+                  id: crypto.randomUUID(),
+                  clientId: view.clientId,
+                  date: remito.date,
+                  items: remito.items,
+                  payments: [],
+                };
+                saveRemitos([...remitos, r]);
+                showToast("Remito guardado");
+                setView({ name: "client", clientId: view.clientId });
+              }}
+            />
+          )}
+
+          {view.name === "payment" && (
+            <PaymentView
+              remito={remitos.find((r) => r.id === view.remitoId)}
+              onCancel={() => setView({ name: "client", clientId: view.clientId })}
+              onSave={(payment) => {
+                const next = remitos.map((r) =>
+                  r.id === view.remitoId ? { ...r, payments: [...r.payments, payment] } : r
+                );
+                saveRemitos(next);
+                showToast("Pago registrado");
+                setView({ name: "client", clientId: view.clientId });
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-sm text-white shadow-lg"
+          style={{ background: "#4A2E1E" }}
+        >
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Header({ totalOwed, view, setView, clients }) {
+  const clientName =
+    view.name !== "clients" ? clients.find((c) => c.id === view.clientId)?.name : null;
+
+  return (
+    <div style={{ background: "#4A2E1E" }} className="text-white px-4 pt-6 pb-5 rounded-b-3xl">
+      <div className="max-w-md mx-auto">
+        <div className="flex items-center gap-2 mb-1">
+          <Wheat size={18} color="#E3B873" />
+          <span className="text-xs tracking-widest uppercase" style={{ color: "#E3B873" }}>
+            Panadería · Remitos
+          </span>
+        </div>
+        {view.name === "clients" ? (
+          <>
+            <h1 className="display text-3xl font-semibold leading-tight">Cuentas de clientes</h1>
+            <p className="mt-2 text-sm" style={{ color: "#D9C4A9" }}>
+              Total pendiente de cobro
+            </p>
+            <p className="display text-4xl font-bold" style={{ color: "#E3B873" }}>
+              {money(totalOwed)}
+            </p>
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button onClick={() => setView({ name: "clients" })} className="p-1 -ml-1">
+              <ArrowLeft size={22} />
+            </button>
+            <h1 className="display text-2xl font-semibold truncate">{clientName}</h1>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClientsView({ clientBalances, onOpen, onAdd }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+
+  return (
+    <div className="mt-5">
+      {clientBalances.length === 0 && !adding && (
+        <div className="text-center py-16">
+          <Receipt className="mx-auto mb-3" size={32} color="#C08A3E" />
+          <p style={{ color: "#8A756A" }} className="text-sm" >Todavía no cargaste clientes.</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {clientBalances.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => onOpen(c)}
+            className="w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm active:scale-[0.99] transition"
+            style={{ border: "1px solid #EDE3D3" }}
+          >
+            <div>
+              <div className="font-semibold" style={{ color: "#4A2E1E" }}>
+                {c.name}
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: "#A0876A" }}>
+                {c.remitoCount} remito{c.remitoCount !== 1 ? "s" : ""}
+                {c.pending > 0 ? ` · ${c.pending} sin saldar` : " · al día"}
+              </div>
+            </div>
+            <div
+              className="display text-lg font-bold"
+              style={{ color: c.balance > 0 ? "#B5482D" : "#5C7C4B" }}
+            >
+              {c.balance > 0 ? money(c.balance) : "Pagado"}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {adding ? (
+        <div className="mt-3 bg-white rounded-2xl p-3 shadow-sm" style={{ border: "1px solid #EDE3D3" }}>
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nombre del cliente"
+            className="w-full px-3 py-2 rounded-xl text-sm"
+            style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => {
+                setAdding(false);
+                setName("");
+              }}
+              className="flex-1 py-2 rounded-xl text-sm font-medium"
+              style={{ background: "#F1E9DA", color: "#4A2E1E" }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                if (name.trim()) {
+                  onAdd(name.trim());
+                  setName("");
+                  setAdding(false);
+                }
+              }}
+              className="flex-1 py-2 rounded-xl text-sm font-semibold text-white"
+              style={{ background: "#C08A3E" }}
+            >
+              Agregar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="mt-3 w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm"
+          style={{ background: "#4A2E1E", color: "white" }}
+        >
+          <Plus size={18} /> Nuevo cliente
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ClientView({ client, remitos, onBack, onNewRemito, onOpenPayment, onDeleteRemito, onDeleteClient }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmDeleteClient, setConfirmDeleteClient] = useState(false);
+
+  if (!client) return null;
+
+  const sorted = [...remitos].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return (
+    <div className="mt-5">
+      <button
+        onClick={onNewRemito}
+        className="w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm text-white mb-4"
+        style={{ background: "#C08A3E" }}
+      >
+        <Plus size={18} /> Nuevo remito
+      </button>
+
+      {sorted.length === 0 && (
+        <p className="text-center text-sm py-10" style={{ color: "#A0876A" }}>
+          Este cliente todavía no tiene remitos.
+        </p>
+      )}
+
+      <div className="space-y-3">
+        {sorted.map((r) => {
+          const { status, total, paid, balance } = statusOf(r);
+          return (
+            <div key={r.id} className="rounded-2xl overflow-hidden shadow-sm">
+              <div style={{ background: "#4A2E1E" }}>
+                <TicketEdge />
+              </div>
+              <div className="bg-white p-4" style={{ borderLeft: "1px solid #EDE3D3", borderRight: "1px solid #EDE3D3" }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs" style={{ color: "#A0876A" }}>
+                      {fmtDate(r.date)}
+                    </div>
+                    <div className="display text-xl font-bold mt-0.5" style={{ color: "#4A2E1E" }}>
+                      {money(total)}
+                    </div>
+                  </div>
+                  <Stamp status={status} />
+                </div>
+
+                <div className="mt-2 text-xs space-y-0.5" style={{ color: "#8A756A" }}>
+                  {r.items.map((it, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span style={{ color: "#6B5A46" }}>
+                        {it.qty} × {it.name}
+                      </span>
+                      <span style={{ color: "#6B5A46" }}>{money(it.qty * it.price)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {balance > 0 && (
+                  <div className="mt-2 text-xs flex justify-between" style={{ color: "#B5482D" }}>
+                    <span>Saldo pendiente</span>
+                    <span className="font-semibold">{money(balance)}</span>
+                  </div>
+                )}
+                {paid > 0 && balance > 0 && (
+                  <div className="text-xs flex justify-between" style={{ color: "#5C7C4B" }}>
+                    <span>Pagado hasta ahora</span>
+                    <span className="font-semibold">{money(paid)}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 mt-3">
+                  {balance > 0 && (
+                    <button
+                      onClick={() => onOpenPayment(r.id)}
+                      className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
+                      style={{ background: "#5C7C4B" }}
+                    >
+                      Registrar pago
+                    </button>
+                  )}
+                  {confirmDeleteId === r.id ? (
+                    <button
+                      onClick={() => {
+                        onDeleteRemito(r.id);
+                        setConfirmDeleteId(null);
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
+                      style={{ background: "#B5482D" }}
+                    >
+                      Confirmar borrado
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(r.id)}
+                      className="px-3 py-2 rounded-xl text-xs"
+                      style={{ color: "#A0876A" }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ background: "#4A2E1E" }}>
+                <TicketEdge flip />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-8 pt-4" style={{ borderTop: "1px solid #EDE3D3" }}>
+        {confirmDeleteClient ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConfirmDeleteClient(false)}
+              className="flex-1 py-2 rounded-xl text-xs font-medium"
+              style={{ background: "#F1E9DA", color: "#4A2E1E" }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onDeleteClient}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
+              style={{ background: "#B5482D" }}
+            >
+              Borrar cliente y sus remitos
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setConfirmDeleteClient(true)} className="text-xs" style={{ color: "#A0876A" }}>
+            Borrar este cliente
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NewRemitoView({ onCancel, onSave }) {
+  const [date, setDate] = useState(todayISO());
+  const [items, setItems] = useState([{ name: "", qty: "", price: "" }]);
+
+  const total = items.reduce((s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0), 0);
+
+  const updateItem = (i, field, value) => {
+    setItems(items.map((it, idx) => (idx === i ? { ...it, [field]: value } : it)));
+  };
+
+  const canSave =
+    items.some((it) => it.name.trim() && parseFloat(it.qty) > 0 && parseFloat(it.price) >= 0) && date;
+
+  return (
+    <div className="mt-5">
+      <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: "1px solid #EDE3D3" }}>
+        <label className="text-xs font-medium" style={{ color: "#8A756A" }}>
+          Fecha
+        </label>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full mt-1 px-3 py-2 rounded-xl text-sm"
+          style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+        />
+
+        <div className="mt-4 space-y-3">
+          {items.map((it, i) => (
+            <div key={i} className="flex gap-2 items-start">
+              <input
+                value={it.name}
+                onChange={(e) => updateItem(i, "name", e.target.value)}
+                placeholder="Producto"
+                className="flex-[2] px-3 py-2 rounded-xl text-sm min-w-0"
+                style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+              />
+              <input
+                type="number"
+                inputMode="decimal"
+                value={it.qty}
+                onChange={(e) => updateItem(i, "qty", e.target.value)}
+                placeholder="Cant."
+                className="flex-1 px-2 py-2 rounded-xl text-sm min-w-0"
+                style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+              />
+              <input
+                type="number"
+                inputMode="decimal"
+                value={it.price}
+                onChange={(e) => updateItem(i, "price", e.target.value)}
+                placeholder="Precio"
+                className="flex-1 px-2 py-2 rounded-xl text-sm min-w-0"
+                style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+              />
+              {items.length > 1 && (
+                <button
+                  onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                  className="p-2 shrink-0"
+                  style={{ color: "#B5482D" }}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => setItems([...items, { name: "", qty: "", price: "" }])}
+          className="mt-3 text-sm font-medium flex items-center gap-1"
+          style={{ color: "#C08A3E" }}
+        >
+          <Plus size={16} /> Agregar producto
+        </button>
+
+        <div className="mt-4 pt-3 flex justify-between items-center" style={{ borderTop: "1px solid #EDE3D3" }}>
+          <span className="text-sm font-medium" style={{ color: "#4A2E1E" }}>
+            Total del remito
+          </span>
+          <span className="display text-2xl font-bold" style={{ color: "#4A2E1E" }}>
+            {money(total)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={onCancel}
+          className="flex-1 py-3 rounded-2xl text-sm font-medium"
+          style={{ background: "#F1E9DA", color: "#4A2E1E" }}
+        >
+          Cancelar
+        </button>
+        <button
+          disabled={!canSave}
+          onClick={() =>
+            onSave({
+              date,
+              items: items
+                .filter((it) => it.name.trim() && parseFloat(it.qty) > 0)
+                .map((it) => ({ name: it.name.trim(), qty: parseFloat(it.qty), price: parseFloat(it.price) || 0 })),
+            })
+          }
+          className="flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40"
+          style={{ background: "#C08A3E" }}
+        >
+          Guardar remito
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PaymentView({ remito, onCancel, onSave }) {
+  const { balance } = remito ? statusOf(remito) : { balance: 0 };
+  const [amount, setAmount] = useState(balance ? String(balance) : "");
+  const [date, setDate] = useState(todayISO());
+
+  if (!remito) return null;
+
+  const amt = parseFloat(amount) || 0;
+  const canSave = amt > 0 && date;
+
+  return (
+    <div className="mt-5">
+      <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: "1px solid #EDE3D3" }}>
+        <div className="text-xs" style={{ color: "#A0876A" }}>
+          Saldo pendiente de este remito
+        </div>
+        <div className="display text-2xl font-bold" style={{ color: "#B5482D" }}>
+          {money(balance)}
+        </div>
+
+        <label className="text-xs font-medium mt-4 block" style={{ color: "#8A756A" }}>
+          Monto a registrar
+        </label>
+        <input
+          type="number"
+          inputMode="decimal"
+          autoFocus
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full mt-1 px-3 py-2 rounded-xl text-sm"
+          style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+        />
+
+        <label className="text-xs font-medium mt-3 block" style={{ color: "#8A756A" }}>
+          Fecha del pago
+        </label>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full mt-1 px-3 py-2 rounded-xl text-sm"
+          style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
+        />
+
+        {amt > 0 && amt < balance && (
+          <div className="mt-2 text-xs" style={{ color: "#C08A3E" }}>
+            Quedará un saldo de {money(balance - amt)} (pago parcial).
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={onCancel}
+          className="flex-1 py-3 rounded-2xl text-sm font-medium"
+          style={{ background: "#F1E9DA", color: "#4A2E1E" }}
+        >
+          Cancelar
+        </button>
+        <button
+          disabled={!canSave}
+          onClick={() => onSave({ amount: amt, date })}
+          className="flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-1"
+          style={{ background: "#5C7C4B" }}
+        >
+          <Check size={16} /> Confirmar pago
+        </button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
