@@ -308,8 +308,14 @@ window.addEventListener('error', function(ev) {
             st.balance > 0 ? e("div", { className: "mt-2 text-xs flex justify-between", style: { color: "#B5482D" } },
               e("span", null, "Saldo pendiente"), e("span", { className: "font-semibold" }, money(st.balance))
             ) : null,
-            (st.paid > 0 && st.balance > 0) ? e("div", { className: "text-xs flex justify-between", style: { color: "#5C7C4B" } },
-              e("span", null, "Pagado hasta ahora"), e("span", { className: "font-semibold" }, money(st.paid))
+            r.payments.length > 0 ? e("div", { className: "mt-2 pt-2 text-xs space-y-0.5", style: { color: "#5C7C4B", borderTop: "1px dashed #EDE3D3" } },
+              r.payments.map(function(p, i) {
+                var methodLabel = p.method === "transferencia" ? "Transferencia" : "Efectivo";
+                return e("div", { key: i, className: "flex justify-between" },
+                  e("span", null, fmtDate(p.date) + " · " + methodLabel),
+                  e("span", { className: "font-semibold" }, money(p.amount))
+                );
+              })
             ) : null,
             e("div", { className: "flex gap-2 mt-3" }, actions)
           ),
@@ -443,6 +449,11 @@ window.addEventListener('error', function(ev) {
     );
   }
 
+  var PAYMENT_METHODS = [
+    { id: "efectivo", label: "Efectivo" },
+    { id: "transferencia", label: "Transferencia" }
+  ];
+
   function PaymentView(props) {
     var remito = props.remito, onCancel = props.onCancel, onSave = props.onSave;
     var balance = remito ? statusOf(remito).balance : 0;
@@ -450,6 +461,8 @@ window.addEventListener('error', function(ev) {
     var amount = amountState[0], setAmount = amountState[1];
     var dateState = useState(todayISO());
     var date = dateState[0], setDate = dateState[1];
+    var methodState = useState("efectivo");
+    var method = methodState[0], setMethod = methodState[1];
 
     if (!remito) return null;
 
@@ -459,6 +472,21 @@ window.addEventListener('error', function(ev) {
     var partialMsg = (amt > 0 && amt < balance) ? e("div", { className: "mt-2 text-xs", style: { color: "#C08A3E" } },
       "Quedará un saldo de " + money(balance - amt) + " (pago parcial)."
     ) : null;
+
+    var methodButtons = e("div", { className: "flex gap-2 mt-1" },
+      PAYMENT_METHODS.map(function(m) {
+        var active = method === m.id;
+        return e("button", {
+          key: m.id,
+          type: "button",
+          onClick: function() { setMethod(m.id); },
+          className: "flex-1 py-2 rounded-xl text-sm font-medium",
+          style: active
+            ? { background: "#4A2E1E", color: "white" }
+            : { background: "#F1E9DA", color: "#4A2E1E", border: "1px solid #EDE3D3" }
+        }, m.label);
+      })
+    );
 
     return e("div", { className: "mt-5" },
       e("div", { className: "bg-white rounded-2xl p-4 shadow-sm", style: { border: "1px solid #EDE3D3" } },
@@ -472,6 +500,8 @@ window.addEventListener('error', function(ev) {
           className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
           style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
         }),
+        e("label", { className: "text-xs font-medium mt-3 block", style: { color: "#8A756A" } }, "Forma de pago"),
+        methodButtons,
         e("label", { className: "text-xs font-medium mt-3 block", style: { color: "#8A756A" } }, "Fecha del pago"),
         e("input", {
           type: "date", value: date,
@@ -489,7 +519,7 @@ window.addEventListener('error', function(ev) {
         }, "Cancelar"),
         e("button", {
           disabled: !canSave,
-          onClick: function() { onSave({ amount: amt, date: date }); },
+          onClick: function() { onSave({ amount: amt, date: date, method: method }); },
           className: "flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-1",
           style: { background: "#5C7C4B" }
         }, e(CheckIcon, { size: 16 }), "Confirmar pago")
