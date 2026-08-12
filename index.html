@@ -8,9 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="Remitos" />
 <title>Remitos Panadería</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <style>
   html, body { margin:0; padding:0; background:#FAF6EE; }
   #root { min-height: 100vh; }
@@ -18,738 +17,613 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo } = React;
+<div id="fallback" style="display:none;padding:24px;font-family:sans-serif;color:#B5482D;">
+  No se pudo cargar la aplicación. Revisá tu conexión a internet e intentá de nuevo.
+</div>
+<script>
+window.addEventListener('error', function(ev) {
+  console.error('Error capturado:', ev.message);
+});
+</script>
+<script>
+(function() {
+  var e = React.createElement;
+  var useState = React.useState;
+  var useEffect = React.useEffect;
+  var useMemo = React.useMemo;
 
-function Icon({ path, size = 24, color = "currentColor", className = "" }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      {path}
-    </svg>
-  );
-}
+  function money(n) {
+    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Math.round(n || 0));
+  }
 
-const Plus = (props) => (
-  <Icon {...props} path={<>
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </>} />
-);
-const X = (props) => (
-  <Icon {...props} path={<>
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </>} />
-);
-const Check = (props) => (
-  <Icon {...props} path={<polyline points="20 6 9 17 4 12" />} />
-);
-const ArrowLeft = (props) => (
-  <Icon {...props} path={<>
-    <line x1="19" y1="12" x2="5" y2="12" />
-    <polyline points="12 19 5 12 12 5" />
-  </>} />
-);
-const Trash2 = (props) => (
-  <Icon {...props} path={<>
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
-    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-  </>} />
-);
-const Wheat = (props) => (
-  <Icon {...props} path={<>
-    <line x1="12" y1="22" x2="12" y2="2" />
-    <path d="M12 6l-3-2M12 6l3-2M12 10l-3-2M12 10l3-2M12 14l-3-2M12 14l3-2M12 18l-3-2M12 18l3-2" />
-  </>} />
-);
-const Receipt = (props) => (
-  <Icon {...props} path={<>
-    <path d="M6 2h12v18l-2-1-2 1-2-1-2 1-2-1-2 1z" />
-    <line x1="9" y1="7" x2="15" y2="7" />
-    <line x1="9" y1="11" x2="15" y2="11" />
-  </>} />
-);
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
 
-const money = (n) =>
-  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(
-    Math.round(n || 0)
-  );
+  function fmtDate(iso) {
+    if (!iso) return "";
+    var parts = iso.split("-");
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+  function statusOf(remito) {
+    var total = remito.items.reduce(function(s, it) { return s + it.qty * it.price; }, 0);
+    var paid = remito.payments.reduce(function(s, p) { return s + p.amount; }, 0);
+    var balance = total - paid;
+    if (balance <= 0) return { status: "pagado", total: total, paid: paid, balance: 0 };
+    if (paid > 0) return { status: "parcial", total: total, paid: paid, balance: balance };
+    return { status: "pendiente", total: total, paid: paid, balance: balance };
+  }
 
-const fmtDate = (iso) => {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-};
-
-function statusOf(remito) {
-  const total = remito.items.reduce((s, it) => s + it.qty * it.price, 0);
-  const paid = remito.payments.reduce((s, p) => s + p.amount, 0);
-  const balance = total - paid;
-  if (balance <= 0) return { status: "pagado", total, paid, balance: 0 };
-  if (paid > 0) return { status: "parcial", total, paid, balance };
-  return { status: "pendiente", total, paid, balance };
-}
-
-const STAMP = {
-  pagado: { label: "PAGADO", color: "#5C7C4B" },
-  parcial: { label: "PARCIAL", color: "#C08A3E" },
-  pendiente: { label: "PENDIENTE", color: "#B5482D" },
-};
-
-function Stamp({ status }) {
-  const s = STAMP[status];
-  return (
-    <div
-      style={{
-        border: `2px solid ${s.color}`,
-        color: s.color,
-        transform: "rotate(-6deg)",
-        fontFamily: "monospace",
-        letterSpacing: "0.08em",
-      }}
-      className="px-2 py-0.5 text-[10px] font-bold rounded-sm select-none shrink-0"
-    >
-      {s.label}
-    </div>
-  );
-}
-
-function TicketEdge({ flip }) {
-  const dots = Array.from({ length: 22 });
-  return (
-    <div className={`flex ${flip ? "rotate-180" : ""} justify-between px-1`}>
-      {dots.map((_, i) => (
-        <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: "#FAF6EE" }} />
-      ))}
-    </div>
-  );
-}
-
-const LS_CLIENTS = "remitos_panaderia_clients";
-const LS_REMITOS = "remitos_panaderia_remitos";
-
-function App() {
-  const [clients, setClients] = useState(null);
-  const [remitos, setRemitos] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState({ name: "clients" });
-  const [toast, setToast] = useState(null);
-
-  useEffect(() => {
-    try {
-      const c = JSON.parse(localStorage.getItem(LS_CLIENTS) || "[]");
-      const r = JSON.parse(localStorage.getItem(LS_REMITOS) || "[]");
-      setClients(c);
-      setRemitos(r);
-    } catch (e) {
-      setClients([]);
-      setRemitos([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const saveClients = (next) => {
-    setClients(next);
-    try {
-      localStorage.setItem(LS_CLIENTS, JSON.stringify(next));
-    } catch (e) {
-      showToast("No se pudo guardar. Reintentá.");
-    }
+  var STAMP = {
+    pagado: { label: "PAGADO", color: "#5C7C4B" },
+    parcial: { label: "PARCIAL", color: "#C08A3E" },
+    pendiente: { label: "PENDIENTE", color: "#B5482D" }
   };
 
-  const saveRemitos = (next) => {
-    setRemitos(next);
-    try {
-      localStorage.setItem(LS_REMITOS, JSON.stringify(next));
-    } catch (e) {
-      showToast("No se pudo guardar. Reintentá.");
-    }
-  };
+  function Icon(props) {
+    return e("svg", {
+      width: props.size || 24,
+      height: props.size || 24,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: props.color || "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      className: props.className || ""
+    }, props.children);
+  }
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  };
-
-  const clientBalances = useMemo(() => {
-    if (!clients || !remitos) return [];
-    return clients
-      .map((c) => {
-        const rs = remitos.filter((r) => r.clientId === c.id);
-        const balance = rs.reduce((s, r) => s + statusOf(r).balance, 0);
-        const pending = rs.filter((r) => statusOf(r).status !== "pagado").length;
-        return { ...c, balance, remitoCount: rs.length, pending };
-      })
-      .sort((a, b) => b.balance - a.balance);
-  }, [clients, remitos]);
-
-  const totalOwed = clientBalances.reduce((s, c) => s + c.balance, 0);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FAF6EE" }}>
-        <Wheat size={32} color="#C08A3E" />
-      </div>
+  function Plus(props) {
+    return e(Icon, props,
+      e("line", { key: "1", x1: 12, y1: 5, x2: 12, y2: 19 }),
+      e("line", { key: "2", x1: 5, y1: 12, x2: 19, y2: 12 })
+    );
+  }
+  function XIcon(props) {
+    return e(Icon, props,
+      e("line", { key: "1", x1: 18, y1: 6, x2: 6, y2: 18 }),
+      e("line", { key: "2", x1: 6, y1: 6, x2: 18, y2: 18 })
+    );
+  }
+  function CheckIcon(props) {
+    return e(Icon, props, e("polyline", { points: "20 6 9 17 4 12" }));
+  }
+  function ArrowLeft(props) {
+    return e(Icon, props,
+      e("line", { key: "1", x1: 19, y1: 12, x2: 5, y2: 12 }),
+      e("polyline", { key: "2", points: "12 19 5 12 12 5" })
+    );
+  }
+  function Trash2(props) {
+    return e(Icon, props,
+      e("polyline", { key: "1", points: "3 6 5 6 21 6" }),
+      e("path", { key: "2", d: "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" }),
+      e("line", { key: "3", x1: 10, y1: 11, x2: 10, y2: 17 }),
+      e("line", { key: "4", x1: 14, y1: 11, x2: 14, y2: 17 }),
+      e("path", { key: "5", d: "M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" })
+    );
+  }
+  function WheatIcon(props) {
+    return e(Icon, props,
+      e("line", { key: "1", x1: 12, y1: 22, x2: 12, y2: 2 }),
+      e("path", { key: "2", d: "M12 6l-3-2M12 6l3-2M12 10l-3-2M12 10l3-2M12 14l-3-2M12 14l3-2M12 18l-3-2M12 18l3-2" })
+    );
+  }
+  function ReceiptIcon(props) {
+    return e(Icon, props,
+      e("path", { key: "1", d: "M6 2h12v18l-2-1-2 1-2-1-2 1-2-1-2 1z" }),
+      e("line", { key: "2", x1: 9, y1: 7, x2: 15, y2: 7 }),
+      e("line", { key: "3", x1: 9, y1: 11, x2: 15, y2: 11 })
     );
   }
 
-  return (
-    <div
-      className="min-h-screen"
-      style={{ background: "#FAF6EE", fontFamily: "system-ui, -apple-system, sans-serif" }}
-    >
-      <style>{`
-        * { box-sizing: border-box; }
-        .display { font-family: Georgia, 'Times New Roman', serif; }
-        input:focus, select:focus, textarea:focus { outline: 2px solid #C08A3E; outline-offset: 1px; }
-        button:focus-visible { outline: 2px solid #C08A3E; outline-offset: 2px; }
-      `}</style>
+  function Stamp(props) {
+    var s = STAMP[props.status];
+    return e("div", {
+      style: {
+        border: "2px solid " + s.color,
+        color: s.color,
+        transform: "rotate(-6deg)",
+        fontFamily: "monospace",
+        letterSpacing: "0.08em"
+      },
+      className: "px-2 py-0.5 text-[10px] font-bold rounded-sm select-none shrink-0"
+    }, s.label);
+  }
 
-      <div className="max-w-md mx-auto pb-28">
-        <Header totalOwed={totalOwed} view={view} setView={setView} clients={clients} />
+  function TicketEdge(props) {
+    var dots = Array.from({ length: 22 });
+    return e("div", { className: "flex " + (props.flip ? "rotate-180" : "") + " justify-between px-1" },
+      dots.map(function(_, i) {
+        return e("div", { key: i, className: "w-1.5 h-1.5 rounded-full", style: { background: "#FAF6EE" } });
+      })
+    );
+  }
 
-        <div className="px-4">
-          {view.name === "clients" && (
-            <ClientsView
-              clientBalances={clientBalances}
-              onOpen={(c) => setView({ name: "client", clientId: c.id })}
-              onAdd={(name) => {
-                const c = { id: crypto.randomUUID(), name };
-                saveClients([...clients, c]);
-              }}
-            />
-          )}
+  var LS_CLIENTS = "remitos_panaderia_clients";
+  var LS_REMITOS = "remitos_panaderia_remitos";
 
-          {view.name === "client" && (
-            <ClientView
-              client={clients.find((c) => c.id === view.clientId)}
-              remitos={remitos.filter((r) => r.clientId === view.clientId)}
-              onBack={() => setView({ name: "clients" })}
-              onNewRemito={() => setView({ name: "newRemito", clientId: view.clientId })}
-              onOpenPayment={(remitoId) => setView({ name: "payment", clientId: view.clientId, remitoId })}
-              onDeleteRemito={(id) => {
-                saveRemitos(remitos.filter((r) => r.id !== id));
-              }}
-              onDeleteClient={() => {
-                saveClients(clients.filter((c) => c.id !== view.clientId));
-                saveRemitos(remitos.filter((r) => r.clientId !== view.clientId));
-                setView({ name: "clients" });
-              }}
-            />
-          )}
+  function Header(props) {
+    var totalOwed = props.totalOwed, view = props.view, setView = props.setView, clients = props.clients;
+    var clientName = null;
+    if (view.name !== "clients") {
+      var found = clients.find(function(c) { return c.id === view.clientId; });
+      clientName = found ? found.name : null;
+    }
+    var inner;
+    if (view.name === "clients") {
+      inner = e(React.Fragment, null,
+        e("h1", { className: "text-3xl font-semibold leading-tight", style: { fontFamily: "Georgia, serif" } }, "Cuentas de clientes"),
+        e("p", { className: "mt-2 text-sm", style: { color: "#D9C4A9" } }, "Total pendiente de cobro"),
+        e("p", { className: "text-4xl font-bold", style: { color: "#E3B873", fontFamily: "Georgia, serif" } }, money(totalOwed))
+      );
+    } else {
+      inner = e("div", { className: "flex items-center gap-3" },
+        e("button", { onClick: function() { setView({ name: "clients" }); }, className: "p-1 -ml-1" }, e(ArrowLeft, { size: 22 })),
+        e("h1", { className: "text-2xl font-semibold truncate", style: { fontFamily: "Georgia, serif" } }, clientName)
+      );
+    }
+    return e("div", { style: { background: "#4A2E1E" }, className: "text-white px-4 pt-6 pb-5 rounded-b-3xl" },
+      e("div", { className: "max-w-md mx-auto" },
+        e("div", { className: "flex items-center gap-2 mb-1" },
+          e(WheatIcon, { size: 18, color: "#E3B873" }),
+          e("span", { className: "text-xs tracking-widest uppercase", style: { color: "#E3B873" } }, "Panadería · Remitos")
+        ),
+        inner
+      )
+    );
+  }
 
-          {view.name === "newRemito" && (
-            <NewRemitoView
-              onCancel={() => setView({ name: "client", clientId: view.clientId })}
-              onSave={(remito) => {
-                const r = {
-                  id: crypto.randomUUID(),
-                  clientId: view.clientId,
-                  date: remito.date,
-                  items: remito.items,
-                  payments: [],
-                };
-                saveRemitos([...remitos, r]);
-                showToast("Remito guardado");
-                setView({ name: "client", clientId: view.clientId });
-              }}
-            />
-          )}
+  function ClientsView(props) {
+    var clientBalances = props.clientBalances, onOpen = props.onOpen, onAdd = props.onAdd;
+    var addingState = useState(false);
+    var adding = addingState[0], setAdding = addingState[1];
+    var nameState = useState("");
+    var name = nameState[0], setName = nameState[1];
 
-          {view.name === "payment" && (
-            <PaymentView
-              remito={remitos.find((r) => r.id === view.remitoId)}
-              onCancel={() => setView({ name: "client", clientId: view.clientId })}
-              onSave={(payment) => {
-                const next = remitos.map((r) =>
-                  r.id === view.remitoId ? { ...r, payments: [...r.payments, payment] } : r
-                );
-                saveRemitos(next);
-                showToast("Pago registrado");
-                setView({ name: "client", clientId: view.clientId });
-              }}
-            />
-          )}
-        </div>
-      </div>
+    var emptyMsg = (clientBalances.length === 0 && !adding) ? e("div", { className: "text-center py-16" },
+      e(ReceiptIcon, { size: 32, color: "#C08A3E", className: "mx-auto mb-3" }),
+      e("p", { style: { color: "#8A756A" }, className: "text-sm" }, "Todavía no cargaste clientes.")
+    ) : null;
 
-      {toast && (
-        <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-sm text-white shadow-lg"
-          style={{ background: "#4A2E1E" }}
-        >
-          {toast}
-        </div>
-      )}
-    </div>
-  );
-}
+    var list = e("div", { className: "space-y-2" },
+      clientBalances.map(function(c) {
+        return e("button", {
+          key: c.id,
+          onClick: function() { onOpen(c); },
+          className: "w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm active:scale-[0.99] transition",
+          style: { border: "1px solid #EDE3D3" }
+        },
+          e("div", null,
+            e("div", { className: "font-semibold", style: { color: "#4A2E1E" } }, c.name),
+            e("div", { className: "text-xs mt-0.5", style: { color: "#A0876A" } },
+              c.remitoCount + " remito" + (c.remitoCount !== 1 ? "s" : "") + (c.pending > 0 ? " · " + c.pending + " sin saldar" : " · al día")
+            )
+          ),
+          e("div", { className: "text-lg font-bold", style: { color: c.balance > 0 ? "#B5482D" : "#5C7C4B", fontFamily: "Georgia, serif" } },
+            c.balance > 0 ? money(c.balance) : "Pagado"
+          )
+        );
+      })
+    );
 
-function Header({ totalOwed, view, setView, clients }) {
-  const clientName =
-    view.name !== "clients" ? clients.find((c) => c.id === view.clientId)?.name : null;
+    var addForm;
+    if (adding) {
+      addForm = e("div", { className: "mt-3 bg-white rounded-2xl p-3 shadow-sm", style: { border: "1px solid #EDE3D3" } },
+        e("input", {
+          autoFocus: true,
+          value: name,
+          onChange: function(ev) { setName(ev.target.value); },
+          placeholder: "Nombre del cliente",
+          className: "w-full px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        e("div", { className: "flex gap-2 mt-2" },
+          e("button", {
+            onClick: function() { setAdding(false); setName(""); },
+            className: "flex-1 py-2 rounded-xl text-sm font-medium",
+            style: { background: "#F1E9DA", color: "#4A2E1E" }
+          }, "Cancelar"),
+          e("button", {
+            onClick: function() {
+              if (name.trim()) { onAdd(name.trim()); setName(""); setAdding(false); }
+            },
+            className: "flex-1 py-2 rounded-xl text-sm font-semibold text-white",
+            style: { background: "#C08A3E" }
+          }, "Agregar")
+        )
+      );
+    } else {
+      addForm = e("button", {
+        onClick: function() { setAdding(true); },
+        className: "mt-3 w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm",
+        style: { background: "#4A2E1E", color: "white" }
+      }, e(Plus, { size: 18 }), "Nuevo cliente");
+    }
 
-  return (
-    <div style={{ background: "#4A2E1E" }} className="text-white px-4 pt-6 pb-5 rounded-b-3xl">
-      <div className="max-w-md mx-auto">
-        <div className="flex items-center gap-2 mb-1">
-          <Wheat size={18} color="#E3B873" />
-          <span className="text-xs tracking-widest uppercase" style={{ color: "#E3B873" }}>
-            Panadería · Remitos
-          </span>
-        </div>
-        {view.name === "clients" ? (
-          <>
-            <h1 className="display text-3xl font-semibold leading-tight">Cuentas de clientes</h1>
-            <p className="mt-2 text-sm" style={{ color: "#D9C4A9" }}>
-              Total pendiente de cobro
-            </p>
-            <p className="display text-4xl font-bold" style={{ color: "#E3B873" }}>
-              {money(totalOwed)}
-            </p>
-          </>
-        ) : (
-          <div className="flex items-center gap-3">
-            <button onClick={() => setView({ name: "clients" })} className="p-1 -ml-1">
-              <ArrowLeft size={22} />
-            </button>
-            <h1 className="display text-2xl font-semibold truncate">{clientName}</h1>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+    return e("div", { className: "mt-5" }, emptyMsg, list, addForm);
+  }
 
-function ClientsView({ clientBalances, onOpen, onAdd }) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
+  function ClientView(props) {
+    var client = props.client, remitos = props.remitos, onNewRemito = props.onNewRemito,
+        onOpenPayment = props.onOpenPayment, onDeleteRemito = props.onDeleteRemito, onDeleteClient = props.onDeleteClient;
 
-  return (
-    <div className="mt-5">
-      {clientBalances.length === 0 && !adding && (
-        <div className="text-center py-16">
-          <Receipt size={32} color="#C08A3E" className="mx-auto mb-3" />
-          <p style={{ color: "#8A756A" }} className="text-sm" >Todavía no cargaste clientes.</p>
-        </div>
-      )}
+    var confirmDeleteIdState = useState(null);
+    var confirmDeleteId = confirmDeleteIdState[0], setConfirmDeleteId = confirmDeleteIdState[1];
+    var confirmDeleteClientState = useState(false);
+    var confirmDeleteClient = confirmDeleteClientState[0], setConfirmDeleteClient = confirmDeleteClientState[1];
 
-      <div className="space-y-2">
-        {clientBalances.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => onOpen(c)}
-            className="w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm active:scale-[0.99] transition"
-            style={{ border: "1px solid #EDE3D3" }}
-          >
-            <div>
-              <div className="font-semibold" style={{ color: "#4A2E1E" }}>
-                {c.name}
-              </div>
-              <div className="text-xs mt-0.5" style={{ color: "#A0876A" }}>
-                {c.remitoCount} remito{c.remitoCount !== 1 ? "s" : ""}
-                {c.pending > 0 ? ` · ${c.pending} sin saldar` : " · al día"}
-              </div>
-            </div>
-            <div
-              className="display text-lg font-bold"
-              style={{ color: c.balance > 0 ? "#B5482D" : "#5C7C4B" }}
-            >
-              {c.balance > 0 ? money(c.balance) : "Pagado"}
-            </div>
-          </button>
-        ))}
-      </div>
+    if (!client) return null;
 
-      {adding ? (
-        <div className="mt-3 bg-white rounded-2xl p-3 shadow-sm" style={{ border: "1px solid #EDE3D3" }}>
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nombre del cliente"
-            className="w-full px-3 py-2 rounded-xl text-sm"
-            style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-          />
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={() => {
-                setAdding(false);
-                setName("");
-              }}
-              className="flex-1 py-2 rounded-xl text-sm font-medium"
-              style={{ background: "#F1E9DA", color: "#4A2E1E" }}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => {
-                if (name.trim()) {
-                  onAdd(name.trim());
-                  setName("");
-                  setAdding(false);
-                }
-              }}
-              className="flex-1 py-2 rounded-xl text-sm font-semibold text-white"
-              style={{ background: "#C08A3E" }}
-            >
-              Agregar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setAdding(true)}
-          className="mt-3 w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm"
-          style={{ background: "#4A2E1E", color: "white" }}
-        >
-          <Plus size={18} /> Nuevo cliente
-        </button>
-      )}
-    </div>
-  );
-}
+    var sorted = remitos.slice().sort(function(a, b) { return a.date < b.date ? 1 : -1; });
 
-function ClientView({ client, remitos, onBack, onNewRemito, onOpenPayment, onDeleteRemito, onDeleteClient }) {
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [confirmDeleteClient, setConfirmDeleteClient] = useState(false);
+    var emptyMsg = sorted.length === 0 ? e("p", { className: "text-center text-sm py-10", style: { color: "#A0876A" } }, "Este cliente todavía no tiene remitos.") : null;
 
-  if (!client) return null;
-
-  const sorted = [...remitos].sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  return (
-    <div className="mt-5">
-      <button
-        onClick={onNewRemito}
-        className="w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm text-white mb-4"
-        style={{ background: "#C08A3E" }}
-      >
-        <Plus size={18} /> Nuevo remito
-      </button>
-
-      {sorted.length === 0 && (
-        <p className="text-center text-sm py-10" style={{ color: "#A0876A" }}>
-          Este cliente todavía no tiene remitos.
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {sorted.map((r) => {
-          const { status, total, paid, balance } = statusOf(r);
-          return (
-            <div key={r.id} className="rounded-2xl overflow-hidden shadow-sm">
-              <div style={{ background: "#4A2E1E" }}>
-                <TicketEdge />
-              </div>
-              <div className="bg-white p-4" style={{ borderLeft: "1px solid #EDE3D3", borderRight: "1px solid #EDE3D3" }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs" style={{ color: "#A0876A" }}>
-                      {fmtDate(r.date)}
-                    </div>
-                    <div className="display text-xl font-bold mt-0.5" style={{ color: "#4A2E1E" }}>
-                      {money(total)}
-                    </div>
-                  </div>
-                  <Stamp status={status} />
-                </div>
-
-                <div className="mt-2 text-xs space-y-0.5" style={{ color: "#8A756A" }}>
-                  {r.items.map((it, i) => (
-                    <div key={i} className="flex justify-between">
-                      <span style={{ color: "#6B5A46" }}>
-                        {it.qty} × {it.name}
-                      </span>
-                      <span style={{ color: "#6B5A46" }}>{money(it.qty * it.price)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {balance > 0 && (
-                  <div className="mt-2 text-xs flex justify-between" style={{ color: "#B5482D" }}>
-                    <span>Saldo pendiente</span>
-                    <span className="font-semibold">{money(balance)}</span>
-                  </div>
-                )}
-                {paid > 0 && balance > 0 && (
-                  <div className="text-xs flex justify-between" style={{ color: "#5C7C4B" }}>
-                    <span>Pagado hasta ahora</span>
-                    <span className="font-semibold">{money(paid)}</span>
-                  </div>
-                )}
-
-                <div className="flex gap-2 mt-3">
-                  {balance > 0 && (
-                    <button
-                      onClick={() => onOpenPayment(r.id)}
-                      className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
-                      style={{ background: "#5C7C4B" }}
-                    >
-                      Registrar pago
-                    </button>
-                  )}
-                  {confirmDeleteId === r.id ? (
-                    <button
-                      onClick={() => {
-                        onDeleteRemito(r.id);
-                        setConfirmDeleteId(null);
-                      }}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
-                      style={{ background: "#B5482D" }}
-                    >
-                      Confirmar borrado
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmDeleteId(r.id)}
-                      className="px-3 py-2 rounded-xl text-xs"
-                      style={{ color: "#A0876A" }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div style={{ background: "#4A2E1E" }}>
-                <TicketEdge flip />
-              </div>
-            </div>
+    var cards = e("div", { className: "space-y-3" },
+      sorted.map(function(r) {
+        var st = statusOf(r);
+        var itemsList = r.items.map(function(it, i) {
+          return e("div", { key: i, className: "flex justify-between" },
+            e("span", { style: { color: "#6B5A46" } }, it.qty + " × " + it.name),
+            e("span", { style: { color: "#6B5A46" } }, money(it.qty * it.price))
           );
-        })}
-      </div>
+        });
+        var actions = [];
+        if (st.balance > 0) {
+          actions.push(e("button", {
+            key: "pay",
+            onClick: function() { onOpenPayment(r.id); },
+            className: "flex-1 py-2 rounded-xl text-xs font-semibold text-white",
+            style: { background: "#5C7C4B" }
+          }, "Registrar pago"));
+        }
+        if (confirmDeleteId === r.id) {
+          actions.push(e("button", {
+            key: "confirm",
+            onClick: function() { onDeleteRemito(r.id); setConfirmDeleteId(null); },
+            className: "px-3 py-2 rounded-xl text-xs font-semibold text-white",
+            style: { background: "#B5482D" }
+          }, "Confirmar borrado"));
+        } else {
+          actions.push(e("button", {
+            key: "del",
+            onClick: function() { setConfirmDeleteId(r.id); },
+            className: "px-3 py-2 rounded-xl text-xs",
+            style: { color: "#A0876A" }
+          }, e(Trash2, { size: 14 })));
+        }
+        return e("div", { key: r.id, className: "rounded-2xl overflow-hidden shadow-sm" },
+          e("div", { style: { background: "#4A2E1E" } }, e(TicketEdge, {})),
+          e("div", { className: "bg-white p-4", style: { borderLeft: "1px solid #EDE3D3", borderRight: "1px solid #EDE3D3" } },
+            e("div", { className: "flex items-start justify-between gap-2" },
+              e("div", null,
+                e("div", { className: "text-xs", style: { color: "#A0876A" } }, fmtDate(r.date)),
+                e("div", { className: "text-xl font-bold mt-0.5", style: { color: "#4A2E1E", fontFamily: "Georgia, serif" } }, money(st.total))
+              ),
+              e(Stamp, { status: st.status })
+            ),
+            e("div", { className: "mt-2 text-xs space-y-0.5", style: { color: "#8A756A" } }, itemsList),
+            st.balance > 0 ? e("div", { className: "mt-2 text-xs flex justify-between", style: { color: "#B5482D" } },
+              e("span", null, "Saldo pendiente"), e("span", { className: "font-semibold" }, money(st.balance))
+            ) : null,
+            (st.paid > 0 && st.balance > 0) ? e("div", { className: "text-xs flex justify-between", style: { color: "#5C7C4B" } },
+              e("span", null, "Pagado hasta ahora"), e("span", { className: "font-semibold" }, money(st.paid))
+            ) : null,
+            e("div", { className: "flex gap-2 mt-3" }, actions)
+          ),
+          e("div", { style: { background: "#4A2E1E" } }, e(TicketEdge, { flip: true }))
+        );
+      })
+    );
 
-      <div className="mt-8 pt-4" style={{ borderTop: "1px solid #EDE3D3" }}>
-        {confirmDeleteClient ? (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setConfirmDeleteClient(false)}
-              className="flex-1 py-2 rounded-xl text-xs font-medium"
-              style={{ background: "#F1E9DA", color: "#4A2E1E" }}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={onDeleteClient}
-              className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
-              style={{ background: "#B5482D" }}
-            >
-              Borrar cliente y sus remitos
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setConfirmDeleteClient(true)} className="text-xs" style={{ color: "#A0876A" }}>
-            Borrar este cliente
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+    var deleteClientSection;
+    if (confirmDeleteClient) {
+      deleteClientSection = e("div", { className: "flex gap-2" },
+        e("button", {
+          onClick: function() { setConfirmDeleteClient(false); },
+          className: "flex-1 py-2 rounded-xl text-xs font-medium",
+          style: { background: "#F1E9DA", color: "#4A2E1E" }
+        }, "Cancelar"),
+        e("button", {
+          onClick: onDeleteClient,
+          className: "flex-1 py-2 rounded-xl text-xs font-semibold text-white",
+          style: { background: "#B5482D" }
+        }, "Borrar cliente y sus remitos")
+      );
+    } else {
+      deleteClientSection = e("button", {
+        onClick: function() { setConfirmDeleteClient(true); },
+        className: "text-xs",
+        style: { color: "#A0876A" }
+      }, "Borrar este cliente");
+    }
 
-function NewRemitoView({ onCancel, onSave }) {
-  const [date, setDate] = useState(todayISO());
-  const [items, setItems] = useState([{ name: "", qty: "", price: "" }]);
+    return e("div", { className: "mt-5" },
+      e("button", {
+        onClick: onNewRemito,
+        className: "w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm text-white mb-4",
+        style: { background: "#C08A3E" }
+      }, e(Plus, { size: 18 }), "Nuevo remito"),
+      emptyMsg,
+      cards,
+      e("div", { className: "mt-8 pt-4", style: { borderTop: "1px solid #EDE3D3" } }, deleteClientSection)
+    );
+  }
 
-  const total = items.reduce((s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0), 0);
+  function NewRemitoView(props) {
+    var onCancel = props.onCancel, onSave = props.onSave;
+    var dateState = useState(todayISO());
+    var date = dateState[0], setDate = dateState[1];
+    var itemsState = useState([{ name: "", qty: "", price: "" }]);
+    var items = itemsState[0], setItems = itemsState[1];
 
-  const updateItem = (i, field, value) => {
-    setItems(items.map((it, idx) => (idx === i ? { ...it, [field]: value } : it)));
-  };
+    var total = items.reduce(function(s, it) { return s + (parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0); }, 0);
 
-  const canSave =
-    items.some((it) => it.name.trim() && parseFloat(it.qty) > 0 && parseFloat(it.price) >= 0) && date;
+    function updateItem(i, field, value) {
+      setItems(items.map(function(it, idx) { return idx === i ? Object.assign({}, it, { [field]: value }) : it; }));
+    }
 
-  return (
-    <div className="mt-5">
-      <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: "1px solid #EDE3D3" }}>
-        <label className="text-xs font-medium" style={{ color: "#8A756A" }}>
-          Fecha
-        </label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full mt-1 px-3 py-2 rounded-xl text-sm"
-          style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-        />
+    var canSave = items.some(function(it) { return it.name.trim() && parseFloat(it.qty) > 0 && parseFloat(it.price) >= 0; }) && date;
 
-        <div className="mt-4 space-y-3">
-          {items.map((it, i) => (
-            <div key={i} className="flex gap-2 items-start">
-              <input
-                value={it.name}
-                onChange={(e) => updateItem(i, "name", e.target.value)}
-                placeholder="Producto"
-                className="flex-[2] px-3 py-2 rounded-xl text-sm min-w-0"
-                style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-              />
-              <input
-                type="number"
-                inputMode="decimal"
-                value={it.qty}
-                onChange={(e) => updateItem(i, "qty", e.target.value)}
-                placeholder="Cant."
-                className="flex-1 px-2 py-2 rounded-xl text-sm min-w-0"
-                style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-              />
-              <input
-                type="number"
-                inputMode="decimal"
-                value={it.price}
-                onChange={(e) => updateItem(i, "price", e.target.value)}
-                placeholder="Precio"
-                className="flex-1 px-2 py-2 rounded-xl text-sm min-w-0"
-                style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-              />
-              {items.length > 1 && (
-                <button
-                  onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                  className="p-2 shrink-0"
-                  style={{ color: "#B5482D" }}
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+    var rows = items.map(function(it, i) {
+      var removeBtn = items.length > 1 ? e("button", {
+        onClick: function() { setItems(items.filter(function(_, idx) { return idx !== i; })); },
+        className: "p-2 shrink-0",
+        style: { color: "#B5482D" }
+      }, e(XIcon, { size: 16 })) : null;
+      return e("div", { key: i, className: "flex gap-2 items-start" },
+        e("input", {
+          value: it.name,
+          onChange: function(ev) { updateItem(i, "name", ev.target.value); },
+          placeholder: "Producto",
+          className: "flex-[2] px-3 py-2 rounded-xl text-sm min-w-0",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        e("input", {
+          type: "number", inputMode: "decimal",
+          value: it.qty,
+          onChange: function(ev) { updateItem(i, "qty", ev.target.value); },
+          placeholder: "Cant.",
+          className: "flex-1 px-2 py-2 rounded-xl text-sm min-w-0",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        e("input", {
+          type: "number", inputMode: "decimal",
+          value: it.price,
+          onChange: function(ev) { updateItem(i, "price", ev.target.value); },
+          placeholder: "Precio",
+          className: "flex-1 px-2 py-2 rounded-xl text-sm min-w-0",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        removeBtn
+      );
+    });
 
-        <button
-          onClick={() => setItems([...items, { name: "", qty: "", price: "" }])}
-          className="mt-3 text-sm font-medium flex items-center gap-1"
-          style={{ color: "#C08A3E" }}
-        >
-          <Plus size={16} /> Agregar producto
-        </button>
-
-        <div className="mt-4 pt-3 flex justify-between items-center" style={{ borderTop: "1px solid #EDE3D3" }}>
-          <span className="text-sm font-medium" style={{ color: "#4A2E1E" }}>
-            Total del remito
-          </span>
-          <span className="display text-2xl font-bold" style={{ color: "#4A2E1E" }}>
-            {money(total)}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex gap-2 mt-4">
-        <button
-          onClick={onCancel}
-          className="flex-1 py-3 rounded-2xl text-sm font-medium"
-          style={{ background: "#F1E9DA", color: "#4A2E1E" }}
-        >
-          Cancelar
-        </button>
-        <button
-          disabled={!canSave}
-          onClick={() =>
+    return e("div", { className: "mt-5" },
+      e("div", { className: "bg-white rounded-2xl p-4 shadow-sm", style: { border: "1px solid #EDE3D3" } },
+        e("label", { className: "text-xs font-medium", style: { color: "#8A756A" } }, "Fecha"),
+        e("input", {
+          type: "date", value: date,
+          onChange: function(ev) { setDate(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        e("div", { className: "mt-4 space-y-3" }, rows),
+        e("button", {
+          onClick: function() { setItems(items.concat([{ name: "", qty: "", price: "" }])); },
+          className: "mt-3 text-sm font-medium flex items-center gap-1",
+          style: { color: "#C08A3E" }
+        }, e(Plus, { size: 16 }), "Agregar producto"),
+        e("div", { className: "mt-4 pt-3 flex justify-between items-center", style: { borderTop: "1px solid #EDE3D3" } },
+          e("span", { className: "text-sm font-medium", style: { color: "#4A2E1E" } }, "Total del remito"),
+          e("span", { className: "text-2xl font-bold", style: { color: "#4A2E1E", fontFamily: "Georgia, serif" } }, money(total))
+        )
+      ),
+      e("div", { className: "flex gap-2 mt-4" },
+        e("button", {
+          onClick: onCancel,
+          className: "flex-1 py-3 rounded-2xl text-sm font-medium",
+          style: { background: "#F1E9DA", color: "#4A2E1E" }
+        }, "Cancelar"),
+        e("button", {
+          disabled: !canSave,
+          onClick: function() {
             onSave({
-              date,
-              items: items
-                .filter((it) => it.name.trim() && parseFloat(it.qty) > 0)
-                .map((it) => ({ name: it.name.trim(), qty: parseFloat(it.qty), price: parseFloat(it.price) || 0 })),
-            })
-          }
-          className="flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40"
-          style={{ background: "#C08A3E" }}
-        >
-          Guardar remito
-        </button>
-      </div>
-    </div>
-  );
-}
+              date: date,
+              items: items.filter(function(it) { return it.name.trim() && parseFloat(it.qty) > 0; })
+                .map(function(it) { return { name: it.name.trim(), qty: parseFloat(it.qty), price: parseFloat(it.price) || 0 }; })
+            });
+          },
+          className: "flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40",
+          style: { background: "#C08A3E" }
+        }, "Guardar remito")
+      )
+    );
+  }
 
-function PaymentView({ remito, onCancel, onSave }) {
-  const { balance } = remito ? statusOf(remito) : { balance: 0 };
-  const [amount, setAmount] = useState(balance ? String(balance) : "");
-  const [date, setDate] = useState(todayISO());
+  function PaymentView(props) {
+    var remito = props.remito, onCancel = props.onCancel, onSave = props.onSave;
+    var balance = remito ? statusOf(remito).balance : 0;
+    var amountState = useState(balance ? String(balance) : "");
+    var amount = amountState[0], setAmount = amountState[1];
+    var dateState = useState(todayISO());
+    var date = dateState[0], setDate = dateState[1];
 
-  if (!remito) return null;
+    if (!remito) return null;
 
-  const amt = parseFloat(amount) || 0;
-  const canSave = amt > 0 && date;
+    var amt = parseFloat(amount) || 0;
+    var canSave = amt > 0 && date;
 
-  return (
-    <div className="mt-5">
-      <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: "1px solid #EDE3D3" }}>
-        <div className="text-xs" style={{ color: "#A0876A" }}>
-          Saldo pendiente de este remito
-        </div>
-        <div className="display text-2xl font-bold" style={{ color: "#B5482D" }}>
-          {money(balance)}
-        </div>
+    var partialMsg = (amt > 0 && amt < balance) ? e("div", { className: "mt-2 text-xs", style: { color: "#C08A3E" } },
+      "Quedará un saldo de " + money(balance - amt) + " (pago parcial)."
+    ) : null;
 
-        <label className="text-xs font-medium mt-4 block" style={{ color: "#8A756A" }}>
-          Monto a registrar
-        </label>
-        <input
-          type="number"
-          inputMode="decimal"
-          autoFocus
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="w-full mt-1 px-3 py-2 rounded-xl text-sm"
-          style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-        />
+    return e("div", { className: "mt-5" },
+      e("div", { className: "bg-white rounded-2xl p-4 shadow-sm", style: { border: "1px solid #EDE3D3" } },
+        e("div", { className: "text-xs", style: { color: "#A0876A" } }, "Saldo pendiente de este remito"),
+        e("div", { className: "text-2xl font-bold", style: { color: "#B5482D", fontFamily: "Georgia, serif" } }, money(balance)),
+        e("label", { className: "text-xs font-medium mt-4 block", style: { color: "#8A756A" } }, "Monto a registrar"),
+        e("input", {
+          type: "number", inputMode: "decimal", autoFocus: true,
+          value: amount,
+          onChange: function(ev) { setAmount(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        e("label", { className: "text-xs font-medium mt-3 block", style: { color: "#8A756A" } }, "Fecha del pago"),
+        e("input", {
+          type: "date", value: date,
+          onChange: function(ev) { setDate(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        partialMsg
+      ),
+      e("div", { className: "flex gap-2 mt-4" },
+        e("button", {
+          onClick: onCancel,
+          className: "flex-1 py-3 rounded-2xl text-sm font-medium",
+          style: { background: "#F1E9DA", color: "#4A2E1E" }
+        }, "Cancelar"),
+        e("button", {
+          disabled: !canSave,
+          onClick: function() { onSave({ amount: amt, date: date }); },
+          className: "flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-1",
+          style: { background: "#5C7C4B" }
+        }, e(CheckIcon, { size: 16 }), "Confirmar pago")
+      )
+    );
+  }
 
-        <label className="text-xs font-medium mt-3 block" style={{ color: "#8A756A" }}>
-          Fecha del pago
-        </label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full mt-1 px-3 py-2 rounded-xl text-sm"
-          style={{ border: "1px solid #EDE3D3", background: "#FAF6EE" }}
-        />
+  function App() {
+    var clientsState = useState(null);
+    var clients = clientsState[0], setClients = clientsState[1];
+    var remitosState = useState(null);
+    var remitos = remitosState[0], setRemitos = remitosState[1];
+    var loadingState = useState(true);
+    var loading = loadingState[0], setLoading = loadingState[1];
+    var viewState = useState({ name: "clients" });
+    var view = viewState[0], setView = viewState[1];
+    var toastState = useState(null);
+    var toast = toastState[0], setToast = toastState[1];
 
-        {amt > 0 && amt < balance && (
-          <div className="mt-2 text-xs" style={{ color: "#C08A3E" }}>
-            Quedará un saldo de {money(balance - amt)} (pago parcial).
-          </div>
-        )}
-      </div>
+    useEffect(function() {
+      try {
+        var c = JSON.parse(localStorage.getItem(LS_CLIENTS) || "[]");
+        var r = JSON.parse(localStorage.getItem(LS_REMITOS) || "[]");
+        setClients(c);
+        setRemitos(r);
+      } catch (err) {
+        setClients([]);
+        setRemitos([]);
+      } finally {
+        setLoading(false);
+      }
+    }, []);
 
-      <div className="flex gap-2 mt-4">
-        <button
-          onClick={onCancel}
-          className="flex-1 py-3 rounded-2xl text-sm font-medium"
-          style={{ background: "#F1E9DA", color: "#4A2E1E" }}
-        >
-          Cancelar
-        </button>
-        <button
-          disabled={!canSave}
-          onClick={() => onSave({ amount: amt, date })}
-          className="flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-1"
-          style={{ background: "#5C7C4B" }}
-        >
-          <Check size={16} /> Confirmar pago
-        </button>
-      </div>
-    </div>
-  );
-}
+    function saveClients(next) {
+      setClients(next);
+      try { localStorage.setItem(LS_CLIENTS, JSON.stringify(next)); } catch (err) { showToast("No se pudo guardar. Reintentá."); }
+    }
+    function saveRemitos(next) {
+      setRemitos(next);
+      try { localStorage.setItem(LS_REMITOS, JSON.stringify(next)); } catch (err) { showToast("No se pudo guardar. Reintentá."); }
+    }
+    function showToast(msg) {
+      setToast(msg);
+      setTimeout(function() { setToast(null); }, 2200);
+    }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    var clientBalances = useMemo(function() {
+      if (!clients || !remitos) return [];
+      return clients.map(function(c) {
+        var rs = remitos.filter(function(r) { return r.clientId === c.id; });
+        var balance = rs.reduce(function(s, r) { return s + statusOf(r).balance; }, 0);
+        var pending = rs.filter(function(r) { return statusOf(r).status !== "pagado"; }).length;
+        return Object.assign({}, c, { balance: balance, remitoCount: rs.length, pending: pending });
+      }).sort(function(a, b) { return b.balance - a.balance; });
+    }, [clients, remitos]);
+
+    var totalOwed = clientBalances.reduce(function(s, c) { return s + c.balance; }, 0);
+
+    if (loading) {
+      return e("div", { className: "min-h-screen flex items-center justify-center", style: { background: "#FAF6EE" } },
+        e(WheatIcon, { size: 32, color: "#C08A3E" })
+      );
+    }
+
+    var content = null;
+    if (view.name === "clients") {
+      content = e(ClientsView, {
+        clientBalances: clientBalances,
+        onOpen: function(c) { setView({ name: "client", clientId: c.id }); },
+        onAdd: function(name) {
+          var c = { id: crypto.randomUUID(), name: name };
+          saveClients(clients.concat([c]));
+        }
+      });
+    } else if (view.name === "client") {
+      content = e(ClientView, {
+        client: clients.find(function(c) { return c.id === view.clientId; }),
+        remitos: remitos.filter(function(r) { return r.clientId === view.clientId; }),
+        onNewRemito: function() { setView({ name: "newRemito", clientId: view.clientId }); },
+        onOpenPayment: function(remitoId) { setView({ name: "payment", clientId: view.clientId, remitoId: remitoId }); },
+        onDeleteRemito: function(id) { saveRemitos(remitos.filter(function(r) { return r.id !== id; })); },
+        onDeleteClient: function() {
+          saveClients(clients.filter(function(c) { return c.id !== view.clientId; }));
+          saveRemitos(remitos.filter(function(r) { return r.clientId !== view.clientId; }));
+          setView({ name: "clients" });
+        }
+      });
+    } else if (view.name === "newRemito") {
+      content = e(NewRemitoView, {
+        onCancel: function() { setView({ name: "client", clientId: view.clientId }); },
+        onSave: function(remito) {
+          var r = { id: crypto.randomUUID(), clientId: view.clientId, date: remito.date, items: remito.items, payments: [] };
+          saveRemitos(remitos.concat([r]));
+          showToast("Remito guardado");
+          setView({ name: "client", clientId: view.clientId });
+        }
+      });
+    } else if (view.name === "payment") {
+      content = e(PaymentView, {
+        remito: remitos.find(function(r) { return r.id === view.remitoId; }),
+        onCancel: function() { setView({ name: "client", clientId: view.clientId }); },
+        onSave: function(payment) {
+          var next = remitos.map(function(r) {
+            return r.id === view.remitoId ? Object.assign({}, r, { payments: r.payments.concat([payment]) }) : r;
+          });
+          saveRemitos(next);
+          showToast("Pago registrado");
+          setView({ name: "client", clientId: view.clientId });
+        }
+      });
+    }
+
+    var toastEl = toast ? e("div", {
+      className: "fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-sm text-white shadow-lg",
+      style: { background: "#4A2E1E" }
+    }, toast) : null;
+
+    return e("div", { className: "min-h-screen", style: { background: "#FAF6EE", fontFamily: "system-ui, -apple-system, sans-serif" } },
+      e("div", { className: "max-w-md mx-auto pb-28" },
+        e(Header, { totalOwed: totalOwed, view: view, setView: setView, clients: clients }),
+        e("div", { className: "px-4" }, content)
+      ),
+      toastEl
+    );
+  }
+
+  try {
+    var root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(e(App));
+  } catch (err) {
+    console.error(err);
+    document.getElementById("fallback").style.display = "block";
+  }
+})();
 </script>
 </body>
 </html>
