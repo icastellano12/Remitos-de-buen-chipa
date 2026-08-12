@@ -7,18 +7,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Remitos" />
 <title>Remitos Panadería</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
-  }
-}
-</script>
 <style>
   html, body { margin:0; padding:0; background:#FAF6EE; }
   #root { min-height: 100vh; }
@@ -26,10 +18,70 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-type="module" data-presets="react">
-import React, { useState, useEffect, useMemo } from "react";
-import ReactDOM from "react-dom/client";
-import { Plus, ArrowLeft, Trash2, X, Check, Wheat, Receipt } from "lucide-react";
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+function Icon({ path, size = 24, color = "currentColor", className = "" }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {path}
+    </svg>
+  );
+}
+
+const Plus = (props) => (
+  <Icon {...props} path={<>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </>} />
+);
+const X = (props) => (
+  <Icon {...props} path={<>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </>} />
+);
+const Check = (props) => (
+  <Icon {...props} path={<polyline points="20 6 9 17 4 12" />} />
+);
+const ArrowLeft = (props) => (
+  <Icon {...props} path={<>
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </>} />
+);
+const Trash2 = (props) => (
+  <Icon {...props} path={<>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+  </>} />
+);
+const Wheat = (props) => (
+  <Icon {...props} path={<>
+    <line x1="12" y1="22" x2="12" y2="2" />
+    <path d="M12 6l-3-2M12 6l3-2M12 10l-3-2M12 10l3-2M12 14l-3-2M12 14l3-2M12 18l-3-2M12 18l3-2" />
+  </>} />
+);
+const Receipt = (props) => (
+  <Icon {...props} path={<>
+    <path d="M6 2h12v18l-2-1-2 1-2-1-2 1-2-1-2 1z" />
+    <line x1="9" y1="7" x2="15" y2="7" />
+    <line x1="9" y1="11" x2="15" y2="11" />
+  </>} />
+);
 
 const money = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(
@@ -67,7 +119,7 @@ function Stamp({ status }) {
         border: `2px solid ${s.color}`,
         color: s.color,
         transform: "rotate(-6deg)",
-        fontFamily: "'Special Elite', monospace",
+        fontFamily: "monospace",
         letterSpacing: "0.08em",
       }}
       className="px-2 py-0.5 text-[10px] font-bold rounded-sm select-none shrink-0"
@@ -91,7 +143,7 @@ function TicketEdge({ flip }) {
 const LS_CLIENTS = "remitos_panaderia_clients";
 const LS_REMITOS = "remitos_panaderia_remitos";
 
-export default function App() {
+function App() {
   const [clients, setClients] = useState(null);
   const [remitos, setRemitos] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -152,7 +204,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#FAF6EE" }}>
-        <Wheat className="animate-pulse" size={32} color="#C08A3E" />
+        <Wheat size={32} color="#C08A3E" />
       </div>
     );
   }
@@ -160,12 +212,11 @@ export default function App() {
   return (
     <div
       className="min-h-screen"
-      style={{ background: "#FAF6EE", fontFamily: "'Work Sans', ui-sans-serif, system-ui" }}
+      style={{ background: "#FAF6EE", fontFamily: "system-ui, -apple-system, sans-serif" }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=Special+Elite&display=swap');
         * { box-sizing: border-box; }
-        .display { font-family: 'Fraunces', serif; }
+        .display { font-family: Georgia, 'Times New Roman', serif; }
         input:focus, select:focus, textarea:focus { outline: 2px solid #C08A3E; outline-offset: 1px; }
         button:focus-visible { outline: 2px solid #C08A3E; outline-offset: 2px; }
       `}</style>
@@ -294,7 +345,7 @@ function ClientsView({ clientBalances, onOpen, onAdd }) {
     <div className="mt-5">
       {clientBalances.length === 0 && !adding && (
         <div className="text-center py-16">
-          <Receipt className="mx-auto mb-3" size={32} color="#C08A3E" />
+          <Receipt size={32} color="#C08A3E" className="mx-auto mb-3" />
           <p style={{ color: "#8A756A" }} className="text-sm" >Todavía no cargaste clientes.</p>
         </div>
       )}
