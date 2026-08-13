@@ -527,6 +527,245 @@ window.addEventListener('error', function(ev) {
     );
   }
 
+  function TabBar(props) {
+    var homeTab = props.homeTab, setHomeTab = props.setHomeTab;
+    var tabs = [
+      { id: "clientes", label: "Clientes" },
+      { id: "remitos", label: "Remitos" },
+      { id: "pagos", label: "Pagos" }
+    ];
+    return e("div", { className: "flex gap-2 mt-5 mb-1" },
+      tabs.map(function(t) {
+        var active = homeTab === t.id;
+        return e("button", {
+          key: t.id,
+          onClick: function() { setHomeTab(t.id); },
+          className: "flex-1 py-2 rounded-xl text-sm font-semibold",
+          style: active
+            ? { background: "#4A2E1E", color: "white" }
+            : { background: "#F1E9DA", color: "#4A2E1E" }
+        }, t.label);
+      })
+    );
+  }
+
+  function DateFilter(props) {
+    var dateFrom = props.dateFrom, setDateFrom = props.setDateFrom, dateTo = props.dateTo, setDateTo = props.setDateTo;
+    return e("div", { className: "flex gap-2 mt-3" },
+      e("div", { className: "flex-1" },
+        e("label", { className: "text-xs font-medium", style: { color: "#8A756A" } }, "Desde"),
+        e("input", {
+          type: "date", value: dateFrom,
+          onChange: function(ev) { setDateFrom(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FFFFFF" }
+        })
+      ),
+      e("div", { className: "flex-1" },
+        e("label", { className: "text-xs font-medium", style: { color: "#8A756A" } }, "Hasta"),
+        e("input", {
+          type: "date", value: dateTo,
+          onChange: function(ev) { setDateTo(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FFFFFF" }
+        })
+      )
+    );
+  }
+
+  function RemitosAllView(props) {
+    var remitos = props.remitos, clients = props.clients, onOpenClient = props.onOpenClient;
+    var fromState = useState("");
+    var dateFrom = fromState[0], setDateFrom = fromState[1];
+    var toState = useState("");
+    var dateTo = toState[0], setDateTo = toState[1];
+
+    var clientNameOf = function(clientId) {
+      var c = clients.find(function(c) { return c.id === clientId; });
+      return c ? c.name : "?";
+    };
+
+    var filtered = remitos.filter(function(r) {
+      if (dateFrom && r.date < dateFrom) return false;
+      if (dateTo && r.date > dateTo) return false;
+      return true;
+    }).sort(function(a, b) { return a.date < b.date ? 1 : -1; });
+
+    var rows = filtered.map(function(r) {
+      var st = statusOf(r);
+      return e("button", {
+        key: r.id,
+        onClick: function() { onOpenClient(r.clientId); },
+        className: "w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm active:scale-[0.99] transition",
+        style: { border: "1px solid #EDE3D3" }
+      },
+        e("div", null,
+          e("div", { className: "font-semibold", style: { color: "#4A2E1E" } }, clientNameOf(r.clientId)),
+          e("div", { className: "text-xs mt-0.5", style: { color: "#A0876A" } }, fmtDate(r.date))
+        ),
+        e("div", { className: "flex items-center gap-2" },
+          e(Stamp, { status: st.status }),
+          e("div", { className: "text-sm font-bold", style: { color: "#4A2E1E", fontFamily: "Georgia, serif" } }, money(st.total))
+        )
+      );
+    });
+
+    var empty = filtered.length === 0 ? e("p", { className: "text-center text-sm py-10", style: { color: "#A0876A" } }, "No hay remitos en ese rango de fechas.") : null;
+
+    return e("div", { className: "mt-2" },
+      e(DateFilter, { dateFrom: dateFrom, setDateFrom: setDateFrom, dateTo: dateTo, setDateTo: setDateTo }),
+      e("div", { className: "space-y-2 mt-3" }, rows),
+      empty
+    );
+  }
+
+  function PagosAllView(props) {
+    var remitos = props.remitos, clients = props.clients, onEditPayment = props.onEditPayment;
+    var fromState = useState("");
+    var dateFrom = fromState[0], setDateFrom = fromState[1];
+    var toState = useState("");
+    var dateTo = toState[0], setDateTo = toState[1];
+
+    var clientNameOf = function(clientId) {
+      var c = clients.find(function(c) { return c.id === clientId; });
+      return c ? c.name : "?";
+    };
+
+    var allPayments = [];
+    remitos.forEach(function(r) {
+      r.payments.forEach(function(p) {
+        allPayments.push({ payment: p, remitoId: r.id, clientId: r.clientId, remitoDate: r.date });
+      });
+    });
+
+    var filtered = allPayments.filter(function(item) {
+      if (dateFrom && item.payment.date < dateFrom) return false;
+      if (dateTo && item.payment.date > dateTo) return false;
+      return true;
+    }).sort(function(a, b) { return a.payment.date < b.payment.date ? 1 : -1; });
+
+    var totalFiltered = filtered.reduce(function(s, item) { return s + item.payment.amount; }, 0);
+
+    var rows = filtered.map(function(item) {
+      var methodLabel = item.payment.method === "transferencia" ? "Transferencia" : "Efectivo";
+      return e("button", {
+        key: item.payment.id,
+        onClick: function() { onEditPayment(item.remitoId, item.payment.id); },
+        className: "w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm active:scale-[0.99] transition",
+        style: { border: "1px solid #EDE3D3" }
+      },
+        e("div", null,
+          e("div", { className: "font-semibold", style: { color: "#4A2E1E" } }, clientNameOf(item.clientId)),
+          e("div", { className: "text-xs mt-0.5", style: { color: "#A0876A" } }, fmtDate(item.payment.date) + " · " + methodLabel + " · remito " + fmtDate(item.remitoDate))
+        ),
+        e("div", { className: "text-sm font-bold", style: { color: "#5C7C4B", fontFamily: "Georgia, serif" } }, money(item.payment.amount))
+      );
+    });
+
+    var empty = filtered.length === 0 ? e("p", { className: "text-center text-sm py-10", style: { color: "#A0876A" } }, "No hay pagos en ese rango de fechas.") : null;
+
+    return e("div", { className: "mt-2" },
+      e(DateFilter, { dateFrom: dateFrom, setDateFrom: setDateFrom, dateTo: dateTo, setDateTo: setDateTo }),
+      filtered.length > 0 ? e("div", { className: "flex justify-between items-center mt-3 px-1" },
+        e("span", { className: "text-xs font-medium", style: { color: "#8A756A" } }, "Total cobrado"),
+        e("span", { className: "text-lg font-bold", style: { color: "#5C7C4B", fontFamily: "Georgia, serif" } }, money(totalFiltered))
+      ) : null,
+      e("div", { className: "space-y-2 mt-3" }, rows),
+      empty
+    );
+  }
+
+  function EditPaymentView(props) {
+    var payment = props.payment, onCancel = props.onCancel, onSave = props.onSave, onDelete = props.onDelete;
+    var confirmDelState = useState(false);
+    var confirmDel = confirmDelState[0], setConfirmDel = confirmDelState[1];
+
+    if (!payment) return e("div", { className: "mt-5 text-center text-sm", style: { color: "#A0876A" } }, "Pago no encontrado.");
+
+    var amountState = useState(String(payment.amount));
+    var amount = amountState[0], setAmount = amountState[1];
+    var dateState = useState(payment.date);
+    var date = dateState[0], setDate = dateState[1];
+    var methodState = useState(payment.method || "efectivo");
+    var method = methodState[0], setMethod = methodState[1];
+
+    var amt = parseFloat(amount) || 0;
+    var canSave = amt > 0 && date;
+
+    var methodButtons = e("div", { className: "flex gap-2 mt-1" },
+      PAYMENT_METHODS.map(function(m) {
+        var active = method === m.id;
+        return e("button", {
+          key: m.id,
+          type: "button",
+          onClick: function() { setMethod(m.id); },
+          className: "flex-1 py-2 rounded-xl text-sm font-medium",
+          style: active
+            ? { background: "#4A2E1E", color: "white" }
+            : { background: "#F1E9DA", color: "#4A2E1E", border: "1px solid #EDE3D3" }
+        }, m.label);
+      })
+    );
+
+    var deleteSection;
+    if (confirmDel) {
+      deleteSection = e("div", { className: "flex gap-2 mt-4" },
+        e("button", {
+          onClick: function() { setConfirmDel(false); },
+          className: "flex-1 py-2 rounded-xl text-xs font-medium",
+          style: { background: "#F1E9DA", color: "#4A2E1E" }
+        }, "Cancelar"),
+        e("button", {
+          onClick: onDelete,
+          className: "flex-1 py-2 rounded-xl text-xs font-semibold text-white",
+          style: { background: "#B5482D" }
+        }, "Confirmar borrado")
+      );
+    } else {
+      deleteSection = e("button", {
+        onClick: function() { setConfirmDel(true); },
+        className: "mt-4 text-xs",
+        style: { color: "#A0876A" }
+      }, "Eliminar este pago");
+    }
+
+    return e("div", { className: "mt-5" },
+      e("div", { className: "bg-white rounded-2xl p-4 shadow-sm", style: { border: "1px solid #EDE3D3" } },
+        e("label", { className: "text-xs font-medium block", style: { color: "#8A756A" } }, "Monto"),
+        e("input", {
+          type: "number", inputMode: "decimal",
+          value: amount,
+          onChange: function(ev) { setAmount(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        e("label", { className: "text-xs font-medium mt-3 block", style: { color: "#8A756A" } }, "Forma de pago"),
+        methodButtons,
+        e("label", { className: "text-xs font-medium mt-3 block", style: { color: "#8A756A" } }, "Fecha"),
+        e("input", {
+          type: "date", value: date,
+          onChange: function(ev) { setDate(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }),
+        deleteSection
+      ),
+      e("div", { className: "flex gap-2 mt-4" },
+        e("button", {
+          onClick: onCancel,
+          className: "flex-1 py-3 rounded-2xl text-sm font-medium",
+          style: { background: "#F1E9DA", color: "#4A2E1E" }
+        }, "Cancelar"),
+        e("button", {
+          disabled: !canSave,
+          onClick: function() { onSave({ amount: amt, date: date, method: method }); },
+          className: "flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-1",
+          style: { background: "#5C7C4B" }
+        }, e(CheckIcon, { size: 16 }), "Guardar cambios")
+      )
+    );
+  }
+
   function App() {
     var clientsState = useState(null);
     var clients = clientsState[0], setClients = clientsState[1];
@@ -538,6 +777,8 @@ window.addEventListener('error', function(ev) {
     var view = viewState[0], setView = viewState[1];
     var toastState = useState(null);
     var toast = toastState[0], setToast = toastState[1];
+    var homeTabState = useState("clientes");
+    var homeTab = homeTabState[0], setHomeTab = homeTabState[1];
 
     useEffect(function() {
       try {
@@ -586,14 +827,33 @@ window.addEventListener('error', function(ev) {
 
     var content = null;
     if (view.name === "clients") {
-      content = e(ClientsView, {
-        clientBalances: clientBalances,
-        onOpen: function(c) { setView({ name: "client", clientId: c.id }); },
-        onAdd: function(name) {
-          var c = { id: crypto.randomUUID(), name: name };
-          saveClients(clients.concat([c]));
-        }
-      });
+      var homeBody;
+      if (homeTab === "clientes") {
+        homeBody = e(ClientsView, {
+          clientBalances: clientBalances,
+          onOpen: function(c) { setView({ name: "client", clientId: c.id }); },
+          onAdd: function(name) {
+            var c = { id: crypto.randomUUID(), name: name };
+            saveClients(clients.concat([c]));
+          }
+        });
+      } else if (homeTab === "remitos") {
+        homeBody = e(RemitosAllView, {
+          remitos: remitos,
+          clients: clients,
+          onOpenClient: function(clientId) { setView({ name: "client", clientId: clientId }); }
+        });
+      } else {
+        homeBody = e(PagosAllView, {
+          remitos: remitos,
+          clients: clients,
+          onEditPayment: function(remitoId, paymentId) { setView({ name: "editPayment", remitoId: remitoId, paymentId: paymentId }); }
+        });
+      }
+      content = e(React.Fragment, null,
+        e(TabBar, { homeTab: homeTab, setHomeTab: setHomeTab }),
+        homeBody
+      );
     } else if (view.name === "client") {
       content = e(ClientView, {
         client: clients.find(function(c) { return c.id === view.clientId; }),
@@ -622,12 +882,40 @@ window.addEventListener('error', function(ev) {
         remito: remitos.find(function(r) { return r.id === view.remitoId; }),
         onCancel: function() { setView({ name: "client", clientId: view.clientId }); },
         onSave: function(payment) {
+          var withId = Object.assign({ id: crypto.randomUUID() }, payment);
           var next = remitos.map(function(r) {
-            return r.id === view.remitoId ? Object.assign({}, r, { payments: r.payments.concat([payment]) }) : r;
+            return r.id === view.remitoId ? Object.assign({}, r, { payments: r.payments.concat([withId]) }) : r;
           });
           saveRemitos(next);
           showToast("Pago registrado");
           setView({ name: "client", clientId: view.clientId });
+        }
+      });
+    } else if (view.name === "editPayment") {
+      var editRemito = remitos.find(function(r) { return r.id === view.remitoId; });
+      var editPayment = editRemito ? editRemito.payments.find(function(p) { return p.id === view.paymentId; }) : null;
+      content = e(EditPaymentView, {
+        payment: editPayment,
+        onCancel: function() { setView({ name: "clients" }); },
+        onSave: function(updated) {
+          var next = remitos.map(function(r) {
+            if (r.id !== view.remitoId) return r;
+            return Object.assign({}, r, {
+              payments: r.payments.map(function(p) { return p.id === view.paymentId ? Object.assign({}, p, updated) : p; })
+            });
+          });
+          saveRemitos(next);
+          showToast("Pago actualizado");
+          setView({ name: "clients" });
+        },
+        onDelete: function() {
+          var next = remitos.map(function(r) {
+            if (r.id !== view.remitoId) return r;
+            return Object.assign({}, r, { payments: r.payments.filter(function(p) { return p.id !== view.paymentId; }) });
+          });
+          saveRemitos(next);
+          showToast("Pago eliminado");
+          setView({ name: "clients" });
         }
       });
     }
