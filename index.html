@@ -379,14 +379,32 @@ window.addEventListener('error', function(ev) {
         className: "p-2 shrink-0",
         style: { color: "#B5482D" }
       }, e(XIcon, { size: 16 })) : null;
-      return e("div", { key: i, className: "flex gap-2 items-start" },
-        e("input", {
+      var isCustom = it.name !== "" && PRODUCTS.indexOf(it.name) === -1;
+      var selectValue = it.name === "" ? "" : (isCustom ? "__custom__" : it.name);
+      var selectOptions = [e("option", { key: "placeholder", value: "" }, "Elegir producto")]
+        .concat(PRODUCTS.map(function(p) { return e("option", { key: p, value: p }, p); }))
+        .concat([e("option", { key: "__custom__", value: "__custom__" }, "Otro (escribir)")]);
+      var productField = e("div", { className: "flex-[2] min-w-0 space-y-1" },
+        e("select", {
+          value: selectValue,
+          onChange: function(ev) {
+            var v = ev.target.value;
+            updateItem(i, "name", v === "__custom__" ? "" : v);
+          },
+          className: "w-full px-3 py-2 rounded-xl text-sm min-w-0",
+          style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
+        }, selectOptions),
+        selectValue === "__custom__" ? e("input", {
+          autoFocus: true,
           value: it.name,
           onChange: function(ev) { updateItem(i, "name", ev.target.value); },
-          placeholder: "Producto",
-          className: "flex-[2] px-3 py-2 rounded-xl text-sm min-w-0",
+          placeholder: "Nombre del producto",
+          className: "w-full px-3 py-2 rounded-xl text-sm min-w-0",
           style: { border: "1px solid #EDE3D3", background: "#FAF6EE" }
-        }),
+        }) : null
+      );
+      return e("div", { key: i, className: "flex gap-2 items-start" },
+        productField,
         e("input", {
           type: "number", inputMode: "decimal",
           value: it.qty,
@@ -448,6 +466,26 @@ window.addEventListener('error', function(ev) {
       )
     );
   }
+
+  var PRODUCTS = [
+    "Chipa",
+    "Alfajores de maicena",
+    "Alfajores chocolate",
+    "Medialunas",
+    "Sopa paraguaya",
+    "Pepas",
+    "Chipa pizza",
+    "Fecula",
+    "Cubanito",
+    "Pan lactal",
+    "Criollo",
+    "Harinilla",
+    "Pan de queso",
+    "Tarta de j y q",
+    "Tarta masa",
+    "Alfajor de almen",
+    "Envases"
+  ];
 
   var PAYMENT_METHODS = [
     { id: "efectivo", label: "Efectivo" },
