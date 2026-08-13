@@ -248,7 +248,8 @@ window.addEventListener('error', function(ev) {
 
   function ClientView(props) {
     var client = props.client, remitos = props.remitos, onNewRemito = props.onNewRemito,
-        onOpenPayment = props.onOpenPayment, onDeleteRemito = props.onDeleteRemito, onDeleteClient = props.onDeleteClient;
+        onOpenPayment = props.onOpenPayment, onDeleteRemito = props.onDeleteRemito, onDeleteClient = props.onDeleteClient,
+        onEditRemito = props.onEditRemito;
 
     var confirmDeleteIdState = useState(null);
     var confirmDeleteId = confirmDeleteIdState[0], setConfirmDeleteId = confirmDeleteIdState[1];
@@ -279,6 +280,12 @@ window.addEventListener('error', function(ev) {
             style: { background: "#5C7C4B" }
           }, "Registrar pago"));
         }
+        actions.push(e("button", {
+          key: "edit",
+          onClick: function() { onEditRemito(r.id); },
+          className: "px-3 py-2 rounded-xl text-xs font-semibold",
+          style: { background: "#F1E9DA", color: "#4A2E1E" }
+        }, "Editar"));
         if (confirmDeleteId === r.id) {
           actions.push(e("button", {
             key: "confirm",
@@ -360,9 +367,9 @@ window.addEventListener('error', function(ev) {
 
   function NewRemitoView(props) {
     var onCancel = props.onCancel, onSave = props.onSave;
-    var dateState = useState(todayISO());
+    var dateState = useState(props.initialDate || todayISO());
     var date = dateState[0], setDate = dateState[1];
-    var itemsState = useState([{ name: "", qty: "", price: "" }]);
+    var itemsState = useState(props.initialItems || [{ name: "", qty: "", price: "" }]);
     var items = itemsState[0], setItems = itemsState[1];
 
     var total = items.reduce(function(s, it) { return s + (parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0); }, 0);
@@ -462,7 +469,7 @@ window.addEventListener('error', function(ev) {
           },
           className: "flex-1 py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40",
           style: { background: "#C08A3E" }
-        }, "Guardar remito")
+        }, props.saveLabel || "Guardar remito")
       )
     );
   }
@@ -898,6 +905,7 @@ window.addEventListener('error', function(ev) {
         remitos: remitos.filter(function(r) { return r.clientId === view.clientId; }),
         onNewRemito: function() { setView({ name: "newRemito", clientId: view.clientId }); },
         onOpenPayment: function(remitoId) { setView({ name: "payment", clientId: view.clientId, remitoId: remitoId }); },
+        onEditRemito: function(remitoId) { setView({ name: "editRemito", clientId: view.clientId, remitoId: remitoId }); },
         onDeleteRemito: function(id) { saveRemitos(remitos.filter(function(r) { return r.id !== id; })); },
         onDeleteClient: function() {
           saveClients(clients.filter(function(c) { return c.id !== view.clientId; }));
@@ -905,6 +913,22 @@ window.addEventListener('error', function(ev) {
           setView({ name: "clients" });
         }
       });
+    } else if (view.name === "editRemito") {
+      var remitoToEdit = remitos.find(function(r) { return r.id === view.remitoId; });
+      content = remitoToEdit ? e(NewRemitoView, {
+        initialDate: remitoToEdit.date,
+        initialItems: remitoToEdit.items.map(function(it) { return { name: it.name, qty: String(it.qty), price: String(it.price) }; }),
+        saveLabel: "Guardar cambios",
+        onCancel: function() { setView({ name: "client", clientId: view.clientId }); },
+        onSave: function(updated) {
+          var next = remitos.map(function(r) {
+            return r.id === view.remitoId ? Object.assign({}, r, { date: updated.date, items: updated.items }) : r;
+          });
+          saveRemitos(next);
+          showToast("Remito actualizado");
+          setView({ name: "client", clientId: view.clientId });
+        }
+      }) : null;
     } else if (view.name === "newRemito") {
       content = e(NewRemitoView, {
         onCancel: function() { setView({ name: "client", clientId: view.clientId }); },
