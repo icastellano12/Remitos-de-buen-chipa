@@ -249,7 +249,7 @@ window.addEventListener('error', function(ev) {
   function ClientView(props) {
     var client = props.client, remitos = props.remitos, onNewRemito = props.onNewRemito,
         onOpenPayment = props.onOpenPayment, onDeleteRemito = props.onDeleteRemito, onDeleteClient = props.onDeleteClient,
-        onEditRemito = props.onEditRemito;
+        onEditRemito = props.onEditRemito, onEditPayment = props.onEditPayment;
 
     var confirmDeleteIdState = useState(null);
     var confirmDeleteId = confirmDeleteIdState[0], setConfirmDeleteId = confirmDeleteIdState[1];
@@ -318,7 +318,11 @@ window.addEventListener('error', function(ev) {
             r.payments.length > 0 ? e("div", { className: "mt-2 pt-2 text-xs space-y-0.5", style: { color: "#5C7C4B", borderTop: "1px dashed #EDE3D3" } },
               r.payments.map(function(p, i) {
                 var methodLabel = p.method === "transferencia" ? "Transferencia" : "Efectivo";
-                return e("div", { key: i, className: "flex justify-between" },
+                return e("button", {
+                  key: p.id || i,
+                  onClick: function() { onEditPayment(r.id, p.id); },
+                  className: "w-full flex justify-between active:opacity-60"
+                },
                   e("span", null, fmtDate(p.date) + " · " + methodLabel),
                   e("span", { className: "font-semibold" }, money(p.amount))
                 );
@@ -674,11 +678,15 @@ window.addEventListener('error', function(ev) {
     var dateFrom = fromState[0], setDateFrom = fromState[1];
     var toState = useState("");
     var dateTo = toState[0], setDateTo = toState[1];
+    var clientFilterState = useState("");
+    var clientFilter = clientFilterState[0], setClientFilter = clientFilterState[1];
 
     var clientNameOf = function(clientId) {
       var c = clients.find(function(c) { return c.id === clientId; });
       return c ? c.name : "?";
     };
+
+    var sortedClients = clients.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
 
     var allPayments = [];
     remitos.forEach(function(r) {
@@ -690,6 +698,7 @@ window.addEventListener('error', function(ev) {
     var filtered = allPayments.filter(function(item) {
       if (dateFrom && item.payment.date < dateFrom) return false;
       if (dateTo && item.payment.date > dateTo) return false;
+      if (clientFilter && item.clientId !== clientFilter) return false;
       return true;
     }).sort(function(a, b) { return a.payment.date < b.payment.date ? 1 : -1; });
 
@@ -711,10 +720,23 @@ window.addEventListener('error', function(ev) {
       );
     });
 
-    var empty = filtered.length === 0 ? e("p", { className: "text-center text-sm py-10", style: { color: "#A0876A" } }, "No hay pagos en ese rango de fechas.") : null;
+    var empty = filtered.length === 0 ? e("p", { className: "text-center text-sm py-10", style: { color: "#A0876A" } }, "No hay pagos con esos filtros.") : null;
 
     return e("div", { className: "mt-2" },
       e(DateFilter, { dateFrom: dateFrom, setDateFrom: setDateFrom, dateTo: dateTo, setDateTo: setDateTo }),
+      e("div", { className: "mt-3" },
+        e("label", { className: "text-xs font-medium", style: { color: "#8A756A" } }, "Cliente"),
+        e("select", {
+          value: clientFilter,
+          onChange: function(ev) { setClientFilter(ev.target.value); },
+          className: "w-full mt-1 px-3 py-2 rounded-xl text-sm",
+          style: { border: "1px solid #EDE3D3", background: "#FFFFFF" }
+        },
+          [e("option", { key: "all", value: "" }, "Todos los clientes")].concat(
+            sortedClients.map(function(c) { return e("option", { key: c.id, value: c.id }, c.name); })
+          )
+        )
+      ),
       filtered.length > 0 ? e("div", { className: "flex justify-between items-center mt-3 px-1" },
         e("span", { className: "text-xs font-medium", style: { color: "#8A756A" } }, "Total cobrado"),
         e("span", { className: "text-lg font-bold", style: { color: "#5C7C4B", fontFamily: "Georgia, serif" } }, money(totalFiltered))
@@ -910,6 +932,7 @@ window.addEventListener('error', function(ev) {
         onNewRemito: function() { setView({ name: "newRemito", clientId: view.clientId }); },
         onOpenPayment: function(remitoId) { setView({ name: "payment", clientId: view.clientId, remitoId: remitoId }); },
         onEditRemito: function(remitoId) { setView({ name: "editRemito", clientId: view.clientId, remitoId: remitoId }); },
+        onEditPayment: function(remitoId, paymentId) { setView({ name: "editPayment", clientId: view.clientId, remitoId: remitoId, paymentId: paymentId }); },
         onDeleteRemito: function(id) { saveRemitos(remitos.filter(function(r) { return r.id !== id; })); },
         onDeleteClient: function() {
           saveClients(clients.filter(function(c) { return c.id !== view.clientId; }));
@@ -960,9 +983,10 @@ window.addEventListener('error', function(ev) {
     } else if (view.name === "editPayment") {
       var editRemito = remitos.find(function(r) { return r.id === view.remitoId; });
       var editPayment = editRemito ? editRemito.payments.find(function(p) { return p.id === view.paymentId; }) : null;
+      var backToView = view.clientId ? { name: "client", clientId: view.clientId } : { name: "clients" };
       content = e(EditPaymentView, {
         payment: editPayment,
-        onCancel: function() { setView({ name: "clients" }); },
+        onCancel: function() { setView(backToView); },
         onSave: function(updated) {
           var next = remitos.map(function(r) {
             if (r.id !== view.remitoId) return r;
@@ -972,7 +996,7 @@ window.addEventListener('error', function(ev) {
           });
           saveRemitos(next);
           showToast("Pago actualizado");
-          setView({ name: "clients" });
+          setView(backToView);
         },
         onDelete: function() {
           var next = remitos.map(function(r) {
@@ -981,7 +1005,7 @@ window.addEventListener('error', function(ev) {
           });
           saveRemitos(next);
           showToast("Pago eliminado");
-          setView({ name: "clients" });
+          setView(backToView);
         }
       });
     }
